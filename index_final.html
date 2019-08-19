@@ -1,0 +1,204 @@
+<html>
+	<head>
+		<meta charset="utf-8">
+		<style>
+			.airlines {
+				fill: none;
+				stroke: lightgrey;
+				stroke-width: 1px;
+			}
+
+			.airline--hover {
+				stroke: darkblue;
+			}
+
+			.cursor text {
+				text-anchor: middle;
+			}
+
+			.voronoi path {
+				fill: none;
+				pointer-events: all;
+			}
+		</style>
+	</head>
+	<body>
+		<script src="//d3js.org/d3.v4.min.js"></script>
+		<script type="text/javascript">
+
+			// define svg object 	
+			var svg = d3.select("body")
+				.append("svg")
+					.attr("width", 1000)
+					.attr("height", 650);
+						
+			margin = {top: 50, right: 30, bottom: 200, left: 60},
+			width = svg.attr("width") - margin.left - margin.right,
+			height = svg.attr("height") - margin.top - margin.bottom,
+			svg = svg.append("g")
+				.attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+
+		    // initialize date variables and define parse object
+			var years,
+				yearKeys,
+				format = d3.timeParse("%Y");
+
+			// define scale objects	
+			var x = d3.scaleTime()
+				.range([0, width]);
+			var y = d3.scaleLinear()
+				.range([height, 0]);
+				
+			// define voronoi object to use it for interaction
+			var voronoi = d3.voronoi()
+				.x(function(d) { return x(d.year); })
+				.y(function(d) { return y(d.value); })
+				.extent([[0, 0], [width, height]]);
+			
+			// define line object
+			var line = d3.line()
+				.x(function(d) { return x(d.year); })
+				.y(function(d) { return y(d.value); });
+
+			// append text elements
+			svg.append("text")
+			      .attr("transform", "rotate(-90)")
+				  .attr("transform", "translate("+ (width/2) +","+(height+margin.bottom/4)+")")
+			      .style("text-anchor", "middle")
+			      .text("Years"); 	
+
+        	svg.append("text")
+			      .attr("transform", "rotate(-90)")
+				  .attr("transform", "translate("+ (width/6) +","+(height+margin.bottom/2)+")")
+			      .style("text-anchor", "middle")
+				  .style("font-weight", "bold")
+			      .text("What is the National Aviation System (NAS) Delay?");
+
+			svg.append("text")
+			      .attr("transform", "rotate(-90)")
+				  .attr("transform", "translate("+ (margin.left+300) +","+(height+margin.bottom/1.5)+")")
+			      .style("text-anchor", "middle")
+			      .text("NAS contains delays and cancellations attributable to the national aviation "+
+					"system that refer to a broad set of conditions,");	
+
+			svg.append("text")
+			      .attr("transform", "rotate(-90)")
+				  .attr("transform", "translate("+ (margin.left+248) +","+(height+margin.bottom/1.3)+")")
+			      .style("text-anchor", "middle")
+			      .text("such as non-extreme weather conditions, airport operations, heavy traffic volume, "+
+					"and air traffic control.");
+
+			svg.append("text")
+			      .attr("transform", "rotate(-90)")
+			      .attr("y", 0 - margin.left)
+			      .attr("x",0 - (height / 2))
+			      .attr("dy", "1em")
+			      .style("text-anchor", "middle")
+			      .text("NAS Delays/Total Delays");      
+			
+			// parse function
+			function parse(d, _, columns) {
+			  // get the years	
+			  yearKeys = columns.slice(1);
+			  years = yearKeys.map(format);
+			  
+			  // define airline object
+			  var airline = {name: d.carrier_name, values: null};
+			  
+			  // fetch years and values
+			  airline.values = yearKeys.map(function(q, s) { return {airline: airline, year: years[s], value: d[q] / 100}; });
+			  return airline;
+			}
+
+			function draw(data) {
+				
+			  // set x and y domain ranges	
+			  x.domain(d3.extent(years));
+			  y.domain(
+			  [0, 
+			  d3.max(data, function(airline) { return d3.max(airline.values, function(d) { return d.value; })})+0.05]
+			  );
+			  
+			  // append axes
+			  svg.append("g")
+				  .attr("class", "axis axis--x")
+				  .attr("transform", "translate(0," + height + ")")
+				  .call(d3.axisBottom(x).ticks(d3.timeYear));  	
+
+			  svg.append("g")
+				  .attr("class", "axis axis--y")
+				  .call(d3.axisLeft(y).ticks(10, "%"))
+				.append("text")
+				  .attr("x", 115)
+				  .attr("y", 0.5)
+				  .attr("dy", "0.32em")
+				  .style("text-anchor", "start")
+				  .style("fill", "#000")
+				  .style("font-weight", "bold")
+				  .style("font-size", "18px")
+				  .text("Impact of National Aviation System Delay on US Air Carriers Flight Schedule"); 	 
+
+			  // append the paths to the svg object to draw lines 	  
+			  svg.append("g")
+				  .attr("class", "airlines")
+				  .selectAll("path")
+				  .data(data)
+				  .enter().append("path")
+				  .attr("d", function(d) { d.line = this; return line(d.values); });			  
+			  // define cursor object for interaction	 
+			  var cursor = svg.append("g")
+				  .attr("transform", "translate(-200,-200)")
+				  .attr("class", "cursor");
+
+			  cursor.append("circle")
+				  .attr("r", 4);
+
+			  cursor.append("text")
+				  .attr("y", -15);
+
+			  // fetch airline values and put them into an array of arrays		  
+			  var airlines = data.map(function(d) {return d.values});
+			  
+			  // combine airlines values into one single array
+			  var airlines_merged = [].concat.apply([], airlines);
+
+			  // define polygons
+			  var polygons = voronoi.polygons(airlines_merged);
+			  
+			  // append voronoi functionality
+			  svg.append("g")
+				  .attr("class", "voronoi")
+				  // select voronoi path elements	  
+			  	  .selectAll("path")
+			      // bind the array of polygons
+				  .data(polygons)
+				  // append the voronoi paths and call callback functions for mouseover/mouseout event attributes
+				  .enter().append("path")
+				  .attr("d", function(d) { return d ? "M" + d.join("L") + "Z" : null; })
+				  .on("mouseover", handleMouseover)
+				  .on("mouseout", handleMouseout);
+
+              // define mouseover interactivity
+			  function handleMouseover(d) {
+			  	// change line color
+				d3.select(d.data.airline.line).classed("airline--hover", true);
+				// position the cursor
+				cursor.attr("transform", "translate(" + x(d.data.year) + "," + y(d.data.value) + ")");
+				// display airline text
+				cursor.select("text").text(d.data.airline.name);
+			  }
+			  
+              // define mouseout interactivity
+			  function handleMouseout(d) {
+			  	// change line color 
+				d3.select(d.data.airline.line).classed("airline--hover", false);
+				// hide cursor 
+				cursor.attr("transform", "translate(-200,-200)");
+			  }
+			}
+
+			// load data and call parse and draw functions
+			d3.tsv("final_df.tsv", parse, draw);
+		</script>
+	</body>
+</html>
